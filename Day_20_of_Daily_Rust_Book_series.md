@@ -2,13 +2,11 @@
 # Day 20 — Advanced Rust Features
 
 
-We are going to cover:
+What are we going to cover:
+
+<img width="296" height="179" alt="Screenshot 2026-04-23 at 3 20 58 AM" src="https://github.com/user-attachments/assets/f4b8c1b1-5314-411c-be58-1a6331e3eec8" />
  
-- Unsafe Rust
-- Advanced Traits
-- Advanced Types
-- Advanced Functions and Closures
-- Macros
+
 
 By this point you have covered ownership, borrowing, lifetimes, traits, generics, iterators, concurrency, and smart pointers. You know how Rust thinks. This chapter is about the parts of Rust that exist specifically for when the normal rules are not enough  when you need to reach deeper, express more, or eliminate more repetition than safe everyday Rust allows.
  
