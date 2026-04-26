@@ -1,4 +1,4 @@
-## Chapter 13 - Functional Language Features (Closures and Iterators)
+# Day 14 - Chapter 13: Functional Language Features (Closures and Iterators)
 
 In this chapter, we will cover:
 
@@ -6,7 +6,7 @@ In this chapter, we will cover:
 
 ---
 
-### 1. Closures: A Quick Introduction
+## 1. Closures: A Quick Introduction
 
 A closure is a small anonymous function.
 You can:
@@ -36,7 +36,7 @@ Rust often infers closure types automatically.
 
 ---
 
-### 2. Why Closures Are Special
+## 2. Why Closures Are Special
 
 Normal `fn` functions do not automatically capture local variables.
 Closures can capture values from where they are created.
@@ -53,7 +53,7 @@ That is the superpower of closures.
 
 ---
 
-### 3. Closure Type Inference Rule
+## 3. Closure Type Inference Rule
 
 A closure gets one concrete type per parameter and return.
 After inference, that closure keeps those types.
@@ -76,7 +76,7 @@ So this closure is not generic over all types.
 
 ---
 
-### 4. How Closures Capture Values
+## 4. How Closures Capture Values
 
 Closures capture values in 3 ways:
 
@@ -84,7 +84,7 @@ Closures capture values in 3 ways:
 2. Mutable borrow (`&mut T`)
 3. Move ownership (`T`)
 
-#### Immutable borrow example
+### Immutable borrow example
 
 ```rust
 let list = vec![1, 2, 3];
@@ -94,7 +94,7 @@ show();
 show();
 ```
 
-#### Mutable borrow example
+### Mutable borrow example
 
 ```rust
 let mut list = vec![1, 2, 3];
@@ -104,7 +104,7 @@ add();
 println!("{list:?}");
 ```
 
-#### Move ownership example
+### Move ownership example
 
 ```rust
 use std::thread;
@@ -122,7 +122,7 @@ thread::spawn(move || {
 
 ---
 
-### 5. `FnOnce`, `FnMut`, `Fn`
+## 5. `FnOnce`, `FnMut`, `Fn`
 
 Rust uses these traits to classify closures.
 
@@ -144,7 +144,7 @@ It uses `FnOnce` because the closure is called at most once.
 
 ---
 
-### 6. Iterators: Processing Items One by One
+## 6. Iterators: Processing Items One by One
 
 Iterator means an object that yields items one at a time.
 
@@ -170,7 +170,7 @@ for x in v.iter() {
 
 ---
 
-### 7. The `Iterator` Trait and `next`
+## 7. The `Iterator` Trait and `next`
 
 Core shape:
 
@@ -201,7 +201,7 @@ assert_eq!(it.next(), None);
 
 ---
 
-### 8. `iter`, `iter_mut`, `into_iter`
+## 8. `iter`, `iter_mut`, `into_iter`
 
 Very important difference:
 
@@ -234,11 +234,11 @@ for s in v.into_iter() {
 
 ---
 
-### 9. Consuming Methods vs Adapter Methods
+## 9. Consuming Methods vs Adapter Methods
 
 Iterator methods are usually of two kinds.
 
-#### Consuming methods
+### Consuming methods
 
 These consume iterator and return final value.
 
@@ -258,7 +258,7 @@ Common consuming methods:
 - `find`
 - `fold`
 
-#### Adapter methods
+### Adapter methods
 
 These return another iterator (still lazy).
 
@@ -288,7 +288,7 @@ it does nothing because it is not consumed.
 
 ---
 
-### 10. Closures + Iterators Together
+## 10. Closures + Iterators Together
 
 Many iterator methods take closures.
 This makes code concise and expressive.
@@ -314,11 +314,11 @@ The closure captures `shoe_size` from environment.
 
 ---
 
-### 11. Real Project Improvement (`minigrep`)
+## 11. Real Project Improvement (`minigrep`)
 
 Chapter 13 improves Chapter 12 code in two useful places.
 
-#### 11.1 Remove unnecessary `clone`
+### 11.1 Remove unnecessary `clone`
 
 Take iterator directly instead of borrowing a slice and cloning strings.
 
@@ -348,7 +348,7 @@ impl Config {
 }
 ```
 
-#### 11.2 Rewrite search using iterator pipeline
+### 11.2 Rewrite search using iterator pipeline
 
 ```rust
 pub fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
@@ -363,7 +363,7 @@ This is simpler than manual loop + mutable vector.
 
 ---
 
-### 12. Performance: Loops vs Iterators
+## 12. Performance: Loops vs Iterators
 
 Rust Book benchmark shows loop and iterator versions perform similarly.
 
@@ -376,7 +376,7 @@ Meaning: higher-level style without runtime penalty.
 
 ---
 
-### 13. Common Mistakes
+## 13. Common Mistakes
 
 1. Forgetting laziness
 
@@ -396,7 +396,7 @@ v.iter().map(|x| x + 1); // does nothing by itself
 
 ---
 
-### 14. Before We Go Deeper
+## 14. Before We Go Deeper
 
 So far, we have covered the core idea of closures and iterators.
 Now let’s go one step deeper with practical patterns that appear often in real Rust code.
@@ -409,7 +409,7 @@ In the next sections, we will focus on:
 
 ---
 
-### 15. `Fn` Traits in Real APIs (`sort_by_key`)
+## 15. `Fn` Traits in Real APIs (`sort_by_key`)
 
 The `Fn` traits become easier when you see where they are used.
 
@@ -446,7 +446,7 @@ If a closure moves a captured value out, it becomes `FnOnce`, and that usually f
 
 ---
 
-### 16. `map` + `filter` + `collect`: Pipeline Mindset
+## 16. `map` + `filter` + `collect`: Pipeline Mindset
 
 A very common Rust pattern is this 3-step pipeline:
 
@@ -476,7 +476,7 @@ Read it like a sentence:
 
 ---
 
-### 17. Building Your Own Iterator (Custom `Iterator`)
+## 17. Building Your Own Iterator (Custom `Iterator`)
 
 You are not limited to `Vec` iterators.
 You can create your own iterator type by implementing `Iterator`.
@@ -524,7 +524,7 @@ This is exactly how you model custom sequences in Rust.
 
 ---
 
-### 18. Combining Custom Iterators with Adapters
+## 18. Combining Custom Iterators with Adapters
 
 Once your type implements `Iterator`, all iterator adapter methods become available.
 
@@ -550,7 +550,7 @@ This shows the real power of iterators:
 
 ---
 
-### 19. Loop vs Iterator: Which One Should You Pick?
+## 19. Loop vs Iterator: Which One Should You Pick?
 
 Both are good Rust.
 Choose the one that makes intent clearer.
@@ -571,7 +571,7 @@ Rust Book performance data supports using iterators confidently.
 
 ---
 
-### 20. Practice Tasks
+## 20. Practice Tasks
 
 Try these quickly:
 
@@ -584,7 +584,7 @@ If you can solve these, you have practical command over closures and iterators.
 
 ---
 
-### 21. Final Summary
+## 21. Final Summary
 
 - Closures are anonymous functions that can capture values from their environment.
 - Rust classifies closures using `FnOnce`, `FnMut`, and `Fn` based on behavior.

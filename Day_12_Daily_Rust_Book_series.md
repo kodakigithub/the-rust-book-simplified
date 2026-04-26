@@ -1,4 +1,4 @@
-# Chapter 11: Writing Automated Tests
+# Day 12 - Chapter 11: Writing Automated Tests
 
 <img width="364" height="157" alt="Chapter 11 topics" src="https://github.com/user-attachments/assets/a26dee1e-8a6a-49b5-8c5f-1ac79327cb64" />
 
