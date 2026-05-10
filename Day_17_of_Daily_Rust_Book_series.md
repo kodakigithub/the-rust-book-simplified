@@ -2,7 +2,7 @@
 
 In this chapter, we will cover:
 
-<img width="275" height="208" alt="Chapter 16 topics" src="https://github.com/user-attachments/assets/434a18c6-3e12-4ca6-9e88-4ceff669dc24" />
+<img width="275" height="208" alt="Chapter 16 topics" src="https://github.com/user-attachments/assets/ce748d33-7ad9-42b0-bbf1-364f138db21e" />
 
 ---
 
