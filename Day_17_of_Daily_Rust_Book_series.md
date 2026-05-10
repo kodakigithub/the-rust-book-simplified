@@ -30,9 +30,9 @@ Rust achieves this using two tools you already know: **ownership** and the **typ
 
 Running tasks concurrently using threads can improve performance — a web server handling multiple requests at once, for example. But threads come with well-known problems:
 
-- **Race conditions** — two threads access shared data in an unpredictable order
-- **Deadlocks** — two threads wait on each other forever, neither making progress
-- **Heisenbugs** — bugs that only appear under very specific timing conditions, nearly impossible to reproduce
+- **Race conditions**
+- **Deadlocks**
+- **Heisenbugs** (bugs that only appear under very specific timing conditions, nearly impossible to reproduce)
 
 ### The 1:1 model
 
