@@ -1,4 +1,3 @@
-
 # Fearless Concurrency
 
 By this point in the book, you've seen how hard Rust works to keep your memory safe. Handling concurrent programming safely and efficiently is one of Rust's core goals — and it approaches it the same way.
@@ -130,3 +129,138 @@ handle.join().unwrap();
 > **Note:** `move` copies the value *into* the closure. Changes made to `v` inside the spawned thread won't affect the original in the main thread. And since ownership has moved, you can't use `v` in the main thread at all after the `move`.
 
 This is Rust's ownership system doing its job: the compiler ensures both threads can never have conflicting access to the same data.
+
+---
+
+## Message Passing
+ 
+Another way to handle concurrency is **message passing** — threads communicate by sending data to each other instead of sharing it.
+ 
+The core primitive for this in Rust is a **channel**.
+ 
+### Channels
+ 
+A channel is a one-way pipe between two threads: data goes in one end and comes out the other.
+ 
+It has two halves:
+- **Transmitter (`tx`)** — the sending end. A thread calls `.send()` on it to push data into the channel.
+- **Receiver (`rx`)** — the receiving end. Another thread reads from it to get the data.
+Rust's standard library implements channels via `std::sync::mpsc`.
+> **mpsc** stands for *multiple producer, single consumer* — you can have multiple transmitters sending into the same channel, but only one receiver on the other end.
+ 
+```rust
+use std::sync::mpsc;
+ 
+fn main() {
+    let (tx, rx) = mpsc::channel();
+}
+```
+ 
+`mpsc::channel()` returns a tuple — the first element is the transmitter, the second is the receiver.
+ 
+### Sending and Receiving
+ 
+Move the transmitter into a spawned thread and call `.send()` to pass a value across:
+ 
+```rust
+use std::sync::mpsc;
+use std::thread;
+ 
+fn main() {
+    let (tx, rx) = mpsc::channel();
+ 
+    thread::spawn(move || {
+        let val = String::from("hi");
+        tx.send(val).unwrap();
+    });
+ 
+    let received = rx.recv().unwrap();
+    println!("Got: {received}");
+}
+```
+ 
+`tx.send(val)` returns `Result<T, E>` — it errors if the receiver has already been dropped.
+ 
+On the receiving side, you have two options:
+ 
+**`rx.recv()`** — blocks the current thread until a value arrives, then returns it as `Result<T, E>`. Returns an error when the channel closes (i.e. the transmitter is dropped).
+ 
+**`rx.try_recv()`** — returns immediately regardless of whether a value is available. Returns `Ok(value)` if something is there, `Err` if not. Useful when the receiving thread has other work to do — you can call it periodically in a loop instead of sitting idle.
+ 
+### Ownership Through Channels
+ 
+When you send a value through a channel, ownership transfers to the receiver. Using the value after sending it won't compile:
+ 
+```rust
+thread::spawn(move || {
+    let val = String::from("hi");
+    tx.send(val).unwrap();
+    println!("{val}"); // error: val was moved into the channel
+});
+```
+ 
+This is intentional. Once a value is sent, the receiving thread owns it and may modify or drop it at any time. Using it on the sending side after that point would be unsafe. Rust catches this at compile time.
+ 
+### Sending Multiple Values
+ 
+A thread can send multiple values through a channel. On the receiving end, treating `rx` as an iterator will yield each value as it arrives and stop when the channel closes:
+ 
+```rust
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
+ 
+fn main() {
+    let (tx, rx) = mpsc::channel();
+ 
+    thread::spawn(move || {
+        let vals = vec!["hi", "from", "the", "thread"];
+        for val in vals {
+            tx.send(val).unwrap();
+            thread::sleep(Duration::from_secs(1));
+        }
+    });
+ 
+    for received in rx {  // iterates until the channel closes
+        println!("Got: {received}");
+    }
+}
+```
+ 
+### Multiple Producers
+ 
+Since `mpsc` allows multiple producers, you can clone the transmitter and give each spawned thread its own copy — all feeding into the same receiver:
+ 
+```rust
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
+ 
+fn main() {
+    let (tx, rx) = mpsc::channel();
+    let tx2 = tx.clone();
+ 
+    thread::spawn(move || {
+        let vals = vec!["hi", "from", "the", "thread"];
+        for val in vals {
+            tx.send(val).unwrap();
+            thread::sleep(Duration::from_secs(1));
+        }
+    });
+ 
+    thread::spawn(move || {
+        let vals = vec!["more", "messages", "for", "you"];
+        for val in vals {
+            tx2.send(val).unwrap();
+            thread::sleep(Duration::from_secs(1));
+        }
+    });
+ 
+    for received in rx {
+        println!("Got: {received}");
+    }
+}
+```
+ 
+Each thread gets its own transmitter clone. All messages converge at the single receiver. The order of output isn't guaranteed — that's concurrency.
+ 
