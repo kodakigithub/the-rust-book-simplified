@@ -1,6 +1,14 @@
-# Fearless Concurrency
+# Day 17 - Chapter 16: Fearless Concurrency
+
+In this chapter, we will cover:
+
+<img width="275" height="208" alt="Chapter 16 topics" src="https://github.com/user-attachments/assets/434a18c6-3e12-4ca6-9e88-4ceff669dc24" />
+
+---
 
 By this point in the book, you've seen how hard Rust works to keep your memory safe. Handling concurrent programming safely and efficiently is one of Rust's core goals — and it approaches it the same way.
+
+**Concurrency** is when multiple tasks are in progress at the same time — your program isn't waiting for one thing to finish before starting another. This can mean tasks truly running in parallel on multiple CPU cores, or a single core switching between tasks rapidly enough to seem simultaneous.
 
 Rust calls this **Fearless Concurrency**. The idea is simple: concurrency bugs should be compile-time errors, not runtime. Once your code compiles, you can be confident it's free from data races and invalid memory access, free from logical errors.
 
@@ -263,4 +271,143 @@ fn main() {
 ```
  
 Each thread gets its own transmitter clone. All messages converge at the single receiver. The order of output isn't guaranteed — that's concurrency.
+
+---
+ 
+## Shared State
+ 
+Channels work well when threads have clear ownership over the data they pass around. But sometimes multiple threads genuinely need to access the *same* piece of data. For that, Rust gives you shared state concurrency.
+ 
+The key primitive here is the **Mutex**.
+ 
+### Mutex
+ 
+A **Mutex** (*mutual exclusion*) ensures only one thread can access the data inside it at a time. Before a thread can read or modify the data, it must acquire the mutex's **lock**. While one thread holds the lock, all others wait. When it's done, it releases the lock and the next thread can proceed.
+ 
+Think of it as a key to a room — only one person can be inside at a time, and to get in you need the key.
+ 
+In Rust, `Mutex<T>` wraps your data. You don't access the data directly — you go through the mutex.
+ 
+```rust
+use std::sync::Mutex;
+ 
+fn main() {
+    let m = Mutex::new(5);
+ 
+    {
+        let mut num = m.lock().unwrap();
+        *num = 6;
+    } // lock is released here
+ 
+    println!("m = {m:?}");
+}
+```
+ 
+`.lock()` blocks the current thread until the lock is available. It returns a `MutexGuard` — a smart pointer that gives you mutable access to the inner value. When the `MutexGuard` goes out of scope, the lock is released automatically. No need to remember to unlock it.
+ 
+`.lock()` returns a `Result` because it can fail — if another thread panicked while holding the lock, the mutex is considered *poisoned* and `.unwrap()` will panic too. For now, `.unwrap()` is fine.
+ 
+### Sharing a Mutex Across Threads
+ 
+To use a `Mutex` across multiple threads, you need to share ownership of it. You might reach for `Rc<T>` — but `Rc<T>` is not thread-safe. Its reference count is not updated atomically, so concurrent access can corrupt it.
+ 
+The thread-safe version is `Arc<T>` — **Atomically Reference Counted**. It works exactly like `Rc<T>` but uses atomic operations under the hood, making it safe to share across threads. The trade-off is a small performance cost, which is why Rust doesn't make `Rc<T>` atomic by default.
+ 
+Wrap your `Mutex` in an `Arc`, clone it for each thread, and you can safely share mutable data:
+ 
+```rust
+use std::sync::{Arc, Mutex};
+use std::thread;
+ 
+fn main() {
+    let counter = Arc::new(Mutex::new(0));
+    let mut handles = vec![];
+ 
+    for _ in 0..10 {
+        let counter = Arc::clone(&counter);
+        let handle = thread::spawn(move || {
+            let mut num = counter.lock().unwrap();
+            *num += 1;
+        });
+        handles.push(handle);
+    }
+ 
+    for handle in handles {
+        handle.join().unwrap();
+    }
+ 
+    println!("Result: {}", *counter.lock().unwrap()); // 10
+}
+```
+ 
+Each thread gets a clone of the `Arc` — not a clone of the data, just a clone of the pointer with an incremented reference count. They all point to the same `Mutex`. One thread locks it, increments the counter, then releases the lock. The next thread proceeds. All ten threads run, and the final count is 10.
+ 
+### Watch Out for Deadlocks
+ 
+A **deadlock** happens when two threads each hold a lock that the other needs. Neither can proceed, so both wait forever.
+ 
+```
+Thread A holds Lock 1, waiting for Lock 2
+Thread B holds Lock 2, waiting for Lock 1
+```
+ 
+Rust doesn't save you from deadlocks at compile time — they're a logic problem, not a type problem. The way to avoid them is to always acquire locks in the same order across all threads, and keep the time a lock is held as short as possible.
+ 
+### `Mutex<T>` and Interior Mutability
+ 
+You may notice something familiar here. `Mutex<T>` lets you mutate data through a shared reference — the same idea as `RefCell<T>`, which you may have seen with `Rc<T>`. Both provide **interior mutability**: the ability to mutate data even when you only have a shared reference to the container.
+ 
+The difference is the context they're designed for:
+ 
+- `RefCell<T>` / `Rc<T>` — single-threaded interior mutability
+- `Mutex<T>` / `Arc<T>` — multi-threaded interior mutability
+The concept is same, but different safety guarantees.
+
+---
+
+
+## `Send` and `Sync`
+ 
+Throughout this chapter, Rust has been quietly enforcing thread safety on your behalf — refusing to compile code that would let two threads race on the same data, or let a non-thread-safe type cross a thread boundary. The mechanism behind all of that is two marker traits: `Send` and `Sync`.
+ 
+You don't usually implement these yourself. But knowing what they mean makes the compiler's error messages much less mysterious.
+ 
+### `Send`
+ 
+A type is `Send` if ownership of it can be safely transferred to another thread.
+ 
+Almost every Rust type is `Send`. The notable exception is `Rc<T>`. Because `Rc<T>` updates its reference count without any synchronization, cloning it across threads could cause two threads to increment or decrement the count simultaneously — corrupting it. So `Rc<T>` is deliberately *not* `Send`. If you try to move an `Rc<T>` into a spawned thread, the compiler will stop you. That's exactly why `Arc<T>` exists.
+ 
+### `Sync`
+ 
+A type is `Sync` if it is safe for multiple threads to hold a reference to it at the same time.
+ 
+More precisely: `T` is `Sync` if `&T` is `Send` — a shared reference to it can be safely sent to another thread.
+ 
+Primitive types like `i32` are `Sync` — any number of threads can read an integer simultaneously with no issue. `Mutex<T>` is `Sync` as long as `T` is `Send` — that's what makes sharing it across threads with `Arc` safe. `Rc<T>` and `RefCell<T>` are *not* `Sync`, for the same reasons they're not `Send`.
+ 
+### Marker Traits
+ 
+`Send` and `Sync` are **marker traits** — they carry no methods. They exist purely to communicate a guarantee to the compiler. Rust uses them to check, at compile time, whether the types in your concurrent code are actually safe to use that way.
+ 
+This is the final piece of how Fearless Concurrency works. Rust doesn't rely on runtime checks or documentation conventions to prevent data races. The type system itself tracks which types are safe to send and share across threads — and rejects your program if they're not.
+ 
+> **Note:** Manually implementing `Send` or `Sync` requires `unsafe` code. It's your way of telling the compiler "I've verified this is safe" when it can't figure that out itself. This is rare, and almost never necessary in practice.
+ 
+---
+ 
+## Summary
+ 
+Rust's approach to concurrency makes it extremely safe and provide a kind of compile-time guarantee. The same ownership rules that prevent memory bugs also prevent data races.
+ 
+To recap what you've covered:
+ 
+- Use **threads** to run code concurrently. Use `move` closures to safely hand data to a spawned thread.
+- Use **channels** (`mpsc`) when threads need to communicate by passing ownership of data.
+- Use **`Mutex<T>`** when multiple threads need access to the same data. Wrap it in `Arc<T>` to share it.
+- **`Send`** and **`Sync`** are the trait-level guarantees that tie all of it together — enforced automatically by the compiler.
+The concurrency tools in this chapter are all part of the standard library. But Rust's model is open — because `Send` and `Sync` are just traits, crates can build their own concurrency primitives that slot into the same safety guarantees. The ecosystem is wide, and all of it plays by the same rules.
+
+
+ 
  
