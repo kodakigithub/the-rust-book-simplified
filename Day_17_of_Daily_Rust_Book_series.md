@@ -36,12 +36,9 @@ Running tasks concurrently using threads can improve performance — a web serve
 
 ### The 1:1 model
 
-Rust's standard library uses a **1:1 threading model**: one OS-level thread per language thread.
+Rust uses a **1:1 model**: one OS thread per Rust thread.
 
-- An **OS-level thread** is a real thread managed by the kernel — it's what actually runs on the CPU.
-- A **language thread** is what you create in code. In Rust's case, each one maps directly to one OS thread.
-
-Some crates implement other threading models (M:N, green threads, etc.), each with different trade-offs. Rust's async system, covered in the next chapter, is another approach to concurrency built on a different model.
+Some crates offer other models (green threads, async, etc.), but the standard library keeps it simple.
 
 ---
 
@@ -82,7 +79,7 @@ In the example above, the spawned thread tries to count to 9, but gets cut off w
 
 ## Waiting for Threads to Finish
 
-To make sure a spawned thread runs to completion, save the return value of `thread::spawn` — a `JoinHandle` — and call `.join()` on it.
+To make sure a spawned thread runs to completion, save the return value of `thread::spawn` (a `JoinHandle`) and call `.join()` on it.
 
 ```rust
 use std::thread;
@@ -114,7 +111,11 @@ Calling `.join()` blocks the current thread until the target thread finishes. Wh
 If a spawned thread needs data from the main thread, you have to use the `move` keyword.
 
 Why?
- When you capture a variable from the outer scope inside a thread's closure, Rust infers that you want to borrow its reference by default. But Rust can't guarantee how long the spawned thread will live — the main thread could drop that value while the spawned thread is still using a reference to it. So Rust refuses to compile it.
+
+- By default, a closure borrows variables from the outer scope.
+- But Rust can't guarantee how long the spawned thread will live.
+- If the main thread drops the value while the spawned thread still needs it, that's unsafe.
+- So Rust refuses to compile.
 
 ```rust
 // This won't compile
@@ -134,9 +135,7 @@ let handle = thread::spawn(move || {
 handle.join().unwrap();
 ```
 
-> **Note:** `move` copies the value *into* the closure. Changes made to `v` inside the spawned thread won't affect the original in the main thread. And since ownership has moved, you can't use `v` in the main thread at all after the `move`.
-
-This is Rust's ownership system doing its job: the compiler ensures both threads can never have conflicting access to the same data.
+> **Note:** `move` transfers ownership into the closure. You can't use `v` in the main thread after that.
 
 ---
 
@@ -190,10 +189,9 @@ fn main() {
 `tx.send(val)` returns `Result<T, E>` — it errors if the receiver has already been dropped.
  
 On the receiving side, you have two options:
- 
-**`rx.recv()`** — blocks the current thread until a value arrives, then returns it as `Result<T, E>`. Returns an error when the channel closes (i.e. the transmitter is dropped).
- 
-**`rx.try_recv()`** — returns immediately regardless of whether a value is available. Returns `Ok(value)` if something is there, `Err` if not. Useful when the receiving thread has other work to do — you can call it periodically in a loop instead of sitting idle.
+
+- `rx.recv()` — blocks until a value arrives. Returns `Err` when the channel closes.
+- `rx.try_recv()` — returns immediately. `Ok(value)` if something is there, `Err` if not. Use this when the receiver has other work to do.
  
 ### Ownership Through Channels
  
@@ -309,11 +307,7 @@ fn main() {
  
 ### Sharing a Mutex Across Threads
  
-To use a `Mutex` across multiple threads, you need to share ownership of it. You might reach for `Rc<T>` — but `Rc<T>` is not thread-safe. Its reference count is not updated atomically, so concurrent access can corrupt it.
- 
-The thread-safe version is `Arc<T>` — **Atomically Reference Counted**. It works exactly like `Rc<T>` but uses atomic operations under the hood, making it safe to share across threads. The trade-off is a small performance cost, which is why Rust doesn't make `Rc<T>` atomic by default.
- 
-Wrap your `Mutex` in an `Arc`, clone it for each thread, and you can safely share mutable data:
+To use a `Mutex` across multiple threads, you need shared ownership. `Rc<T>` won't work here — it's not thread-safe. Use `Arc<T>` (**Atomically Reference Counted**) instead:
  
 ```rust
 use std::sync::{Arc, Mutex};
@@ -340,7 +334,7 @@ fn main() {
 }
 ```
  
-Each thread gets a clone of the `Arc` — not a clone of the data, just a clone of the pointer with an incremented reference count. They all point to the same `Mutex`. One thread locks it, increments the counter, then releases the lock. The next thread proceeds. All ten threads run, and the final count is 10.
+Each thread gets an `Arc` clone — not a clone of the data, just a clone of the pointer. They all point to the same `Mutex`. Final result: `10`.
  
 ### Watch Out for Deadlocks
  
@@ -380,11 +374,11 @@ Almost every Rust type is `Send`. The notable exception is `Rc<T>`. Because `Rc<
  
 ### `Sync`
  
-A type is `Sync` if it is safe for multiple threads to hold a reference to it at the same time.
- 
-More precisely: `T` is `Sync` if `&T` is `Send` — a shared reference to it can be safely sent to another thread.
- 
-Primitive types like `i32` are `Sync` — any number of threads can read an integer simultaneously with no issue. `Mutex<T>` is `Sync` as long as `T` is `Send` — that's what makes sharing it across threads with `Arc` safe. `Rc<T>` and `RefCell<T>` are *not* `Sync`, for the same reasons they're not `Send`.
+A type is `Sync` if multiple threads can safely hold references to it at the same time.
+
+- `i32` is `Sync`.
+- `Mutex<T>` is `Sync` if `T` is `Send`.
+- `Rc<T>` and `RefCell<T>` are not.
  
 ### Marker Traits
  
@@ -401,12 +395,13 @@ This is the final piece of how Fearless Concurrency works. Rust doesn't rely on 
 Rust's approach to concurrency makes it extremely safe and provide a kind of compile-time guarantee. The same ownership rules that prevent memory bugs also prevent data races.
  
 To recap what you've covered:
- 
+
 - Use **threads** to run code concurrently. Use `move` closures to safely hand data to a spawned thread.
 - Use **channels** (`mpsc`) when threads need to communicate by passing ownership of data.
 - Use **`Mutex<T>`** when multiple threads need access to the same data. Wrap it in `Arc<T>` to share it.
 - **`Send`** and **`Sync`** are the trait-level guarantees that tie all of it together — enforced automatically by the compiler.
-The concurrency tools in this chapter are all part of the standard library. But Rust's model is open — because `Send` and `Sync` are just traits, crates can build their own concurrency primitives that slot into the same safety guarantees. The ecosystem is wide, and all of it plays by the same rules.
+
+This chapter covered the standard library tools. You'll also see concurrency in crates and **async Rust** — they build on the same `Send` and `Sync` rules.
 
 
  
